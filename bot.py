@@ -93,7 +93,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         messages = [{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history[user_id]
 
         response = client.chat.completions.create(
-            model="llama3-70b-8192",
+            model="llama-3.3-70b-versatile",
             messages=messages,
             max_tokens=1024,
             temperature=0.7
