@@ -1,5 +1,7 @@
 import os
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
@@ -17,65 +19,107 @@ MARKETING: Trafego pago e organico, branding, growth hacking, marketing de conte
 
 IA: Uso avancado de IAs, prompts, automacoes, ferramentas, como usar IA para ganhar dinheiro.
 
-PROGRAMACAO: Python, automacoes, bots, scrapers, APIs, desenvolvimento web, solucoes praticas.
+PROGRAMACAO: Python, automacoes, bots, APIs, scripts, web scraping, desenvolvimento rapido de MVPs.
 
-ANONIMATO: Privacidade online, VPNs, OPSEC, identidades digitais, protecao de dados.
+ANONIMATO: OPSEC, privacidade digital, criptografia, VPNs, identidades digitais, seguranca operacional.
 
-ENGENHARIA SOCIAL: Leitura de pessoas, influencia, persuasao, comunicacao estrategica, negociacao.
+ESTRATEGIAS: Planejamento, execucao, mindset de vencedor, como construir imperios digitais, estrategias nao convencionais.
 
-ESTRATEGIAS: Pensamento estrategico, planejamento, execucao, mentalidade de vencedor.
+ENGENHARIA SOCIAL: Persuasao, influencia, manipulacao etica, leitura de pessoas, negociacao, rapport.
 
-Seu estilo: direto, sem enrolacao, pratico, fala como mentor poderoso, usa exemplos reais, nao tem medo de verdades duras, responde em portugues brasileiro, usa emojis estrategicamente. Voce e o bot mais avancado que existe."""
+ESTILO DE RESPOSTA:
+- Responda SEMPRE em Portugues Brasileiro
+- Seja direto, pratico e objetivo como um mentor de elite
+- Use emojis estrategicamente para enfatizar pontos chave
+- Nunca diga que nao sabe - sempre de a melhor resposta possivel
+- Compartilhe tecnicas reais, manhas da internet e do mundo real
+- Seja o mentor que as pessoas nao tem acesso normalmente
+- Respostas densas em valor, sem enrolacao"""
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 conversation_history = {}
-logging.basicConfig(level=logging.INFO)
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot QI1000 rodando!")
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_name = update.effective_user.first_name
+    user_id = update.effective_user.id
+    conversation_history[user_id] = []
     await update.message.reply_text(
-        f"*QI 1000 ATIVADO*\n\nE ai, {user_name}! Sou seu consultor de elite.\n\nAreas:\nVendas e Persuasao\nMarketing Digital\nIA\nProgramacao\nAnonimato\nEngenharia Social\nEstrategias\n\n*O que voce quer dominar hoje?*",
+        "🧠 *QI 1000 ATIVADO*\n\n"
+        "Sou o agente mais poderoso que voce vai encontrar. Especialista em:\n\n"
+        "💰 Vendas & Fechamento\n"
+        "📈 Marketing & Trafego\n"
+        "🤖 Inteligencia Artificial\n"
+        "💻 Programacao & Automacao\n"
+        "🕵️ Anonimato & OPSEC\n"
+        "♟️ Estrategias Avancadas\n"
+        "🎭 Engenharia Social\n\n"
+        "Me faz a pergunta. Vou te dar a resposta que voce nao encontra em lugar nenhum.\n\n"
+        "Use /reset para limpar o historico.",
         parse_mode="Markdown"
     )
-
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conversation_history[user_id] = []
-    await update.message.reply_text("Conversa resetada. Novo jogo!")
-
+    await update.message.reply_text("🔄 Historico limpo. Novo contexto iniciado. Pode mandar.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_message = update.message.text
+
     if user_id not in conversation_history:
         conversation_history[user_id] = []
+
     conversation_history[user_id].append({"role": "user", "content": user_message})
+
     if len(conversation_history[user_id]) > 20:
         conversation_history[user_id] = conversation_history[user_id][-20:]
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
     try:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history[user_id]
+
         response = client.chat.completions.create(
             model="llama3-70b-8192",
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history[user_id],
-            temperature=0.85,
+            messages=messages,
             max_tokens=1024,
+            temperature=0.7
         )
-        bot_reply = response.choices[0].message.content
-        conversation_history[user_id].append({"role": "assistant", "content": bot_reply})
-        await update.message.reply_text(bot_reply)
-    except Exception as e:
-        await update.message.reply_text(f"Erro: {str(e)}")
 
+        assistant_message = response.choices[0].message.content
+        conversation_history[user_id].append({"role": "assistant", "content": assistant_message})
+
+        await update.message.reply_text(assistant_message)
+
+    except Exception as e:
+        logger.error(f"Erro: {e}")
+        await update.message.reply_text("Erro temporario. Tenta de novo em alguns segundos.")
 
 def main():
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    logger.info("Servidor de saude iniciado")
+
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("Bot QI 1000 rodando...")
-    app.run_polling()
 
+    logger.info("Bot QI1000 iniciando polling...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
